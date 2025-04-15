@@ -2,11 +2,19 @@
 
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
-Add a folder labeled C:\your Path to PSX Grpahics\ cout
+Add a folder labeled cout like so 
 
-Start by editing path in render to your downloaded at the very bottom, line 324
+C:\your Path to PSX Grpahics\ cout
+
+and add the tv.c file to this folder
+
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+For the rendering machien start by editing path in render to your downloaded at the very bottom, line 324
+
 
  base_path = "C:\\Your\\Path\\PSXGraphics"
+
 
 Open windows cmd directory from your PSXGraphics Path and input:
 
