@@ -2,6 +2,8 @@
 
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
+Add a folder labeled C:\your Path to PSX Grpahics\ cout
+
 Start by editing path in render to your downloaded at the very bottom, line 324
 
  base_path = "C:\\Your\\Path\\PSXGraphics"
