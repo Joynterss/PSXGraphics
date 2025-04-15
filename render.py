@@ -126,7 +126,7 @@ def render_model(base_name, base_path):
         return
 
     pygame.init()
-    screen = pygame.display.set_mode((screen_width, screen_height))
+    screen = pygame.display.set_mode((screen_width, screen_height), pygame.RESIZABLE)
     pygame.display.set_caption("Joynters - Wireframe")
 
     vertices = np.array(vertices, dtype=np.float32)
@@ -162,6 +162,11 @@ def render_model(base_name, base_path):
         for event in pygame.event.get():
             if event.type == QUIT:
                 running = False
+
+            elif event.type == pygame.VIDEORESIZE:
+                screen_width, screen_height = event.w, event.h
+                screen = pygame.display.set_mode((screen_width, screen_height), pygame.RESIZABLE)
+    
             elif event.type == MOUSEBUTTONDOWN and event.button == 1:
                 is_dragging = True
                 last_mouse_pos = event.pos
