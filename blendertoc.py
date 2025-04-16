@@ -87,6 +87,14 @@ def export_model_to_c(filepath, model_name, scale_factor=200.0):
             n_idx.append(n_i)
             uv_idx.append(uv_i)
 
+            # After collecting v_idx, n_idx, uv_idx (CCW)
+            # Reverse the winding order for PS1 (CW)
+            v_idx = v_idx[::-1]
+            n_idx = n_idx[::-1]
+            uv_idx = uv_idx[::-1]
+
+
+
         # Adjust for quads by copying the last vertex, normal, and UV
         if len(v_idx) == 3:
             v_idx.append(v_idx[2])
