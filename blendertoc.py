@@ -17,22 +17,72 @@ class ExportPSXModel(bpy.types.Operator, ExportHelper):
     )
 
     def execute(self, context):
-        # Extract model name from the chosen file path
         model_name = os.path.splitext(os.path.basename(self.filepath))[0]
         print(f"Using model name: {model_name}")
         return export_model_to_c(self.filepath, model_name)
 
+def scale_to_texture_space(verts, texture_width=256, texture_height=256):
+    min_x = min(v[0] for v in verts)
+    max_x = max(v[0] for v in verts)
+    min_y = min(v[1] for v in verts)
+    max_y = max(v[1] for v in verts)
+    min_z = min(v[2] for v in verts)
+    max_z = max(v[2] for v in verts)
 
-def export_model_to_c(filepath, model_name, scale_factor=200.0):
-    # First, explicitly set the model_name to ensure it's properly passed and used
-    print(f"Exporting model with name: {model_name}")  # Debug print to verify the model_name
-    
+    scale_x = texture_width / (max_x - min_x) if max_x != min_x else 1
+    scale_y = texture_height / (max_y - min_y) if max_y != min_y else 1
+    scale_z = texture_width / (max_z - min_z) if max_z != min_z else 1
+
+    center_x = (max_x + min_x) / 2
+    center_y = (max_y + min_y) / 2
+    center_z = (max_z + min_z) / 2
+
+    scaled_verts = []
+    for vert in verts:
+        x = (vert[0] - center_x) * scale_x
+        y = (vert[1] - center_y) * scale_y
+        z = (vert[2] - center_z) * scale_z
+        scaled_verts.append((x, y, z))
+
+    return scaled_verts
+
+def export_model_to_c(filepath, model_name, scale_factor=3.5):
+    print(f"Exporting model with name: {model_name}")
+
+    TEXTURE_WIDTH = 256
+    TEXTURE_HEIGHT = 256
+
     obj = bpy.context.active_object
     depsgraph = bpy.context.evaluated_depsgraph_get()
     obj_eval = obj.evaluated_get(depsgraph)
+
+    bpy.ops.object.transform_apply(location=True, rotation=True, scale=True)
+
     mesh = obj_eval.to_mesh()
 
-    # Initialize maps and lists for storing the vertices, normals, and UVs
+    # Get bounding box dimensions
+    coords = [v.co for v in mesh.vertices]
+    min_x = min(v.x for v in coords)
+    max_x = max(v.x for v in coords)
+    min_y = min(v.y for v in coords)
+    max_y = max(v.y for v in coords)
+    min_z = min(v.z for v in coords)
+    max_z = max(v.z for v in coords)
+
+    size_x = max_x - min_x
+    size_y = max_y - min_y
+    size_z = max_z - min_z
+    max_dim = max(size_x, size_y, size_z)
+
+    # Compute center offset and normalization scale
+    offset = mathutils.Vector((
+        (min_x + max_x) / 2,
+        (min_y + max_y) / 2,
+        (min_z + max_z) / 2
+    ))
+
+    uniform_scale = (TEXTURE_WIDTH / 2) / max_dim * scale_factor  # Fit model into [-128, 128]
+
     vertex_map = {}
     normal_map = {}
     uv_map = {}
@@ -45,7 +95,6 @@ def export_model_to_c(filepath, model_name, scale_factor=200.0):
     normal_indices = []
 
     def unique_insert(item, item_map, item_list):
-        """Helper function to insert unique items and return their index"""
         if item in item_map:
             return item_map[item]
         index = len(item_list)
@@ -55,58 +104,57 @@ def export_model_to_c(filepath, model_name, scale_factor=200.0):
 
     uv_layer = mesh.uv_layers.active.data if mesh.uv_layers else None
 
-    # Loop through each polygon in the mesh
     for poly in mesh.polygons:
         v_idx = []
         n_idx = []
         uv_idx = []
 
-        # Loop through each vertex of the polygon
         for loop_idx in poly.loop_indices:
-            vert = mesh.vertices[mesh.loops[loop_idx].vertex_index].co
+            vert = mesh.vertices[mesh.loops[loop_idx].vertex_index].co - offset
             norm = mesh.loops[loop_idx].normal
             uv = uv_layer[loop_idx].uv if uv_layer else mathutils.Vector((0.0, 0.0))
 
-            # Scale the vertices and normalize the normal vectors
-            # Swap Y and Z, and invert the new Y (to turn Blender +Y into PSX -Z)
+            # Convert vertex coordinates with scaling and Y/Z swap
             v = (
-                round(vert.x * scale_factor, 2),
-                round(-vert.z * scale_factor, 2),
-                round(vert.y * scale_factor, 2)
+                round(vert.x * uniform_scale, 2),
+                round(-vert.z * uniform_scale, 2),
+                round(vert.y * uniform_scale, 2)
             )
 
             n = (round(norm.x, 2), round(norm.y, 2), round(norm.z, 2))
-            uv_int = (round(uv.x, 2), round(uv.y, 2))
 
-            # Insert the vertices, normals, and UVs into the respective lists
+            uv_px = (
+                round(uv.x * TEXTURE_WIDTH, 2),
+                round(uv.y * TEXTURE_HEIGHT, 2)
+            )
+
             v_i = unique_insert(v, vertex_map, verts)
             n_i = unique_insert(n, normal_map, norms)
-            uv_i = unique_insert(uv_int, uv_map, uvs)
+            uv_i = unique_insert(uv_px, uv_map, uvs)
 
             v_idx.append(v_i)
             n_idx.append(n_i)
             uv_idx.append(uv_i)
 
-            # After collecting v_idx, n_idx, uv_idx (CCW)
-            # Reverse the winding order for PS1 (CW)
-            v_idx = v_idx[::-1]
-            n_idx = n_idx[::-1]
-            uv_idx = uv_idx[::-1]
-
-
-
-        # Adjust for quads by copying the last vertex, normal, and UV
         if len(v_idx) == 3:
-            v_idx.append(v_idx[2])
-            n_idx.append(n_idx[2])
-            uv_idx.append(uv_idx[2])
+            # Convert triangle to fake quad with duplicate last index
+            vertex_indices.append(f"{{{v_idx[0]},{v_idx[1]},{v_idx[2]},{v_idx[2]}}}")
+            uv_indices.append(f"{{{uv_idx[0]},{uv_idx[1]},{uv_idx[2]},{uv_idx[2]}}}")
+            normal_indices.extend([f"{n_idx[0]}", f"{n_idx[1]}", f"{n_idx[2]}", f"{n_idx[2]}"])
+        elif len(v_idx) == 4:
+            if len(v_idx) == 4:
+            # Original winding (CW)
+                vertex_indices.append(f"{{{v_idx[0]},{v_idx[1]},{v_idx[2]},{v_idx[3]}}}")
+                uv_indices.append(f"{{{uv_idx[0]},{uv_idx[1]},{uv_idx[2]},{uv_idx[3]}}}")
+                normal_indices.extend([f"{n_idx[0]}", f"{n_idx[1]}", f"{n_idx[2]}", f"{n_idx[3]}"])
 
-        # Store the indices for the vertices, normals, and UVs
-        vertex_indices.append(f"{{{v_idx[0]},{v_idx[1]},{v_idx[2]},{v_idx[3]}}}")
-        uv_indices.append(f"{{{uv_idx[0]},{uv_idx[1]},{uv_idx[2]},{uv_idx[3]}}}")
-        normal_indices.append(f"{n_idx[0]}")
+                # Reversed winding (CCW)
+                vertex_indices.append(f"{{{v_idx[3]},{v_idx[2]},{v_idx[1]},{v_idx[0]}}}")
+                uv_indices.append(f"{{{uv_idx[3]},{uv_idx[2]},{uv_idx[1]},{uv_idx[0]}}}")
+                normal_indices.extend([f"{n_idx[3]}", f"{n_idx[2]}", f"{n_idx[1]}", f"{n_idx[0]}"])
 
-    # Convert lists of vertices, normals, UVs, and indices to string format for C
+
+
     verts_str = ',\n  '.join([f"{{{x},{y},{z}}}" for (x, y, z) in verts])
     norms_str = ',\n  '.join([f"{{{x},{y},{z}}}" for (x, y, z) in norms])
     uvs_str = ',\n  '.join([f"{{{x},{y}}}" for (x, y) in uvs])
@@ -114,7 +162,6 @@ def export_model_to_c(filepath, model_name, scale_factor=200.0):
     uv_indices_str = ',\n  '.join(uv_indices)
     normal_indices_str = ',\n  '.join(normal_indices)
 
-    # Use the model_name for all variables in the C content
     c_content = f"""#include <psxgte.h>
 #include "../display.h"
 
@@ -145,7 +192,6 @@ SVECTOR {model_name}_uv[] = {{
 }}; 
 """
 
-    # Write the C content to the file
     try:
         with open(filepath, "w") as file:
             file.write(c_content)
