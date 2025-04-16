@@ -166,10 +166,11 @@ def render_model(base_name, base_path):
             elif event.type == pygame.VIDEORESIZE:
                 screen_width, screen_height = event.w, event.h
                 screen = pygame.display.set_mode((screen_width, screen_height), pygame.RESIZABLE)
-    
+                
             elif event.type == MOUSEBUTTONDOWN and event.button == 1:
                 is_dragging = True
                 last_mouse_pos = event.pos
+                
             elif event.type == MOUSEBUTTONUP and event.button == 1:
                 is_dragging = False
 
