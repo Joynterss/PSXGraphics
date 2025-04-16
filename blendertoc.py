@@ -19,7 +19,7 @@ class ExportPSXModel(bpy.types.Operator, ExportHelper):
     def execute(self, context):
         # Extract model name from the chosen file path
         model_name = os.path.splitext(os.path.basename(self.filepath))[0]
-        print(f"✅ Using model name: {model_name}")
+        print(f"Using model name: {model_name}")
         return export_model_to_c(self.filepath, model_name)
 
 
